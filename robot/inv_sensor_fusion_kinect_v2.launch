@@ -1,0 +1,80 @@
+<launch>
+
+  <arg name="localization"     default="false"/>
+  <!-- Wheather or not to publish kinect_v2 transform -->
+  <arg name="publish_tf"       default="true"/>
+  <arg name="base_frame_id"    default="base_link"/>
+  <arg name="kinect2_frame_id" default="kinect2_link"/>
+  <arg name="imu_frame_id"     default="imu_link"/>
+  <arg name="resolution"       default="sd"/>
+
+  <!-- Run kinect2_bridge  -->
+  <include file="$(find kinect2_bridge)/launch/kinect2_bridge.launch">
+    <arg name="publish_tf"    value="$(arg publish_tf)"/>
+    <!--cpu, opengl, opencl, cuda, clkde, cudakde-->
+    <arg name="depth_method"  value="cuda"/>
+    <!--cpu, opencl -->
+    <arg name="reg_method"    value="cpu"/>
+  </include>
+
+  <!-- Run imu um7 sensor: -->
+  <node pkg="um7" type="um7_driver" name="imu_um7_node">
+    <param name="port"            value="/dev/ttyUSB0"/>
+    <param name="baud"            value="115200"/>
+    <param name="frame_id"        value="$(arg imu_frame_id)"/>
+    <!-- include magnetometer data in the pose estimate. This causes the yaw parameter
+         to track to magnetic heading but with a long filter time constant. Otherwise,
+         the yaw value will tend to drift slowly but continuously.  -->
+    <param name="mag_updates"     value="true"/>
+    <!--sets the EKF in quaternion mode where it generates the quaternion data
+        necessary for the orientation data in the imu/data message. If not true, the
+        orientation data will read 0,0,0,1 (all 0 degree attitudes) -->
+    <param name="quat_mode"       value="true"/>
+    <!--If true, the um7_driver will send a zero_gyros command to the sensor at driver
+        startup. This command causes the sensor to average gyro readings over about
+        1 second to determine the null value of the gyros. The vehicle must be
+        stationary during this command. -->
+    <param name="zero_gyros"      value="true"/>
+  </node>
+      
+  <arg name="pi_half"         value="1.5707963267948966"/>
+  <arg name="pi"              value="3.1415926535897932"/>
+  <arg name="optical_rotate"  value="0.0 0.0 0.0 -$(arg pi_half) 0 -$(arg pi_half)"/>
+
+  <!--Base frame is alwasy oriented in accordance with ROS coordinate system. That is:
+      X axis is pointing Forward - in the direction of robot movement.
+      Y axis is pointing to the Left
+      Z axis is pointing Up
+
+      With Kinect v2, base frame is located at RGB camera.
+  -->
+
+  <!-- Camera rotate 
+       Camera image natural orientation is when X is pointint to the Right, 
+       Y is pointing Down, and Z is pointing Forward.
+       Thus we perform following rotation -->
+  <node pkg="tf" type="static_transform_publisher" name="base_frame_to_kinect2"
+    args="$(arg optical_rotate) $(arg base_frame_id) $(arg kinect2_frame_id) 100"/>
+
+  <!-- IMU frame: just over the RGB camera 
+       The um7 driver performs rotations converting um7 coordinate system to ROS -->
+  <node pkg="tf" type="static_transform_publisher" name="base_frame_to_imu"
+   args="-0.025 0.0 0.032 0.0 0.0 0.0 $(arg base_frame_id) $(arg imu_frame_id) 100"/>
+    
+  <!-- run SLAM with RtabMap and robot_localization providing odometry by fusing data
+       from rgbd_odometry and imu data -->
+  <include file="$(find rtabmap_ros)/launch/invenco/inv_sensor_fusion.launch">
+    <arg name="frame_id"                              value="$(arg base_frame_id)"/>
+    <arg name="localization"                          value="$(arg localization)"/>
+    <arg name="rgb_topic"                             value=
+      "/kinect2/$(arg resolution)/image_color_rect"/>
+    <arg name="depth_topic"                           value=
+      "/kinect2/$(arg resolution)/image_depth_rect"/>
+    <arg name="camera_info_topic"                     value=
+      "/kinect2/$(arg resolution)/camera_info"/>
+    <arg name="imu_topic"                             value="imu/data"/>
+    <arg name="imu_ignore_acc"                        value="true"/>
+    <arg name="imu_remove_gravitational_acceleration" value="false"/>
+  </include>
+
+</launch>

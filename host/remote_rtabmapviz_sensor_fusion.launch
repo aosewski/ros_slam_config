@@ -1,0 +1,40 @@
+<launch>
+
+  <!-- Corresponding config files -->
+  <arg name="rtabmapviz_cfg" default="-d $(find rtabmap_ros)/launch/config/rgbd_gui.ini" />
+
+  <!-- Fixed frame id, you may set "base_link" or "base_footprint" if they are published -->
+  <arg name="frame_id"    default="base_link"/>
+  <arg name="resolution"  default="sd"/>   
+  <arg name="compressed"  default="false"/>
+  <arg name="approx_sync" default="true"/>
+
+  <arg name="rgb_topic"   default="/kinect2/$(arg resolution)/image_color_rect"/>
+  <arg name="depth_topic" default="/kinect2/$(arg resolution)/image_depth_rect"/>
+  <arg name="camera_info_topic" default="/kinect2/$(arg resolution)/camera_info"/>
+
+  <arg if="$(arg compressed)"     name="rgb_topic_relay"           default="/kinect2/data_throttled_image_relay"/>
+  <arg unless="$(arg compressed)" name="rgb_topic_relay"           default="$(arg rgb_topic)"/>
+  <arg if="$(arg compressed)"     name="depth_topic_relay"         default="/kinect2/data_throttled_image_depth_relay"/>
+  <arg unless="$(arg compressed)" name="depth_topic_relay"         default="$(arg depth_topic)"/>
+  <arg if="$(arg compressed)"     name="camera_info_topic_relay"   default="/kinect2/data_throttled_camera_info"/>
+  <arg unless="$(arg compressed)" name="camera_info_topic_relay"   default="$(arg camera_info_topic)"/>
+
+  <group ns="rtabmap">
+    <node pkg="rtabmap_ros" type="rtabmapviz" name="rtabmapviz" 
+        args="$(arg rtabmapviz_cfg)" output="screen">
+
+      <param name="frame_id"            type="string" value="$(arg frame_id)"/>
+      <param name="subscribe_depth"     type="bool"   value="true"/>
+      <param name="subscribe_odom_info" type="bool"   value="true"/>
+      <param name="approx_sync"         type="bool"   value="$(arg approx_sync)"/>
+      
+      <param name="rgb_image_transport" type="string" value="compressed"/>
+
+      <remap from="rgb/image"       to="$(arg rgb_topic_relay)"/>
+      <remap from="depth/image"     to="$(arg depth_topic_relay)"/>
+      <remap from="rgb/camera_info" to="$(arg camera_info_topic_relay)"/>
+      <remap from="odom"            to="/odometry/filtered"/>
+    </node>
+  </group>
+</launch>

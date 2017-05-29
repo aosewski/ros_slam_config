@@ -1,0 +1,194 @@
+<launch>
+
+  <!-- Which image resolution to process in rtabmap: sd, qhd, hd -->
+  <arg name="resolution"      default="sd"/>
+  <!-- Fixed frame id, you may set "base_link" or "base_footprint" 
+    if they are published -->
+  <arg name="frame_id"        default="kinect2_base_link"/>
+
+  <arg name="approx_sync"     default="true"/>
+  <arg name="rtabmap_args"    default="--delete_db_on_start"/>
+
+  <arg name="play_bag"        default="false"/>
+  <arg name="bag_filename"    default="kv2_test_$(arg resolution)"/>
+  <arg name="bags_path"       default="/home/nvidia/playground/kinect/data/bags/"/>
+  <param if="$(arg play_bag)" name="use_sim_time"  value="true"/>
+
+  <arg name="rgb_topic"          default="/kinect2/$(arg resolution)/image_color_rect"/>
+  <arg name="depth_topic"        default="/kinect2/$(arg resolution)/image_depth_rect"/>
+  <arg name="camera_info_topic"  default="/kinect2/$(arg resolution)/camera_info"/>
+
+  <!-- If you want to subscribe to compressed image topics -->
+  <arg name="compressed"              default="false"/>
+  <!-- Common types: compressed, theora (see "rosrun image_transport list_transports") -->
+  <arg name="rgb_image_transport"     default="compressed"/>    
+  <!-- Common types: compressed, theora (see "rosrun image_transport list_transports") -->
+  <arg name="depth_image_transport"   default="compressedDepth"/>  
+
+  <arg if="$(arg compressed)"     name="rgb_topic_relay"    
+    default="$(arg rgb_topic)_relay"/>
+  <arg unless="$(arg compressed)" name="rgb_topic_relay"    default="$(arg rgb_topic)"/>
+  <arg if="$(arg compressed)"     name="depth_topic_relay"  
+    default="$(arg depth_topic)_relay"/>
+  <arg unless="$(arg compressed)" name="depth_topic_relay"  default="$(arg depth_topic)"/>
+
+  <!-- Rotate the camera -->
+  <arg name="pi/2" value="1.5707963267948966"/>
+  <arg name="optical_rotate" value="0 0 0 -$(arg pi/2) 0 -$(arg pi/2)" />
+  <node pkg="tf" type="static_transform_publisher" name="kinect2_base_link"
+        args="$(arg optical_rotate) kinect2_base_link kinect2_link 100" /> 
+                     
+   <!-- ODOMETRY MAIN ARGUMENTS: 
+        -"strategy"        : Strategy: Frame-to-Map 1=Frame-To-Frame
+        -"feature"         : Feature type: 0=SURF 1=SIFT 2=ORB 3=FAST/FREAK 
+                              4=FAST/BRIEF 5=GFTT/FREAK 6=GFTT/BRIEF 7=BRISK
+        -"nn"              : Nearest neighbor strategy : 0=Linear, 1=FLANN_KDTREE, 
+                              2=FLANN_LSH, 3=BRUTEFORCE 4=BRUTEFORCE_GPU
+                             Set to 1 for float descriptor like SIFT/SURF                  
+                             Set to 3 for binary descriptor like ORB/FREAK/BRIEF/BRISK  
+        -"max_depth"       : Maximum features depth (m)  
+        -"min_inliers"     : Minimum visual correspondences to accept a transformation (m) 
+        -"inlier_distance" : RANSAC maximum inliers distance (m)  
+        -"local_map"       : Local map size: number of unique features to keep track 
+        -"odom_info_data"  : Fill odometry info messages with inliers/outliers data.
+        -"correspondence"  : 0=Features Matching, 1=Optical Flow 
+        -"feature_win_size": Matching window size (pixels) around projected points -->
+    -->
+  <arg name="strategy"            default="1"/>
+  <!--2=ORB działa całkiem sprawnie przy Frame-To-Frame i Feature Maching-->
+  <arg name="feature"             default="6"/>
+  <arg name="nn"                  default="3"/>
+  <arg name="max_depth"           default="6.0"/>
+  <arg name="min_inliers"         default="10"/>
+  <arg name="inlier_distance"     default="0.1"/>
+  <arg name="feature_win_size"    default="40"/>
+  <arg name="local_map"           default="1000"/>
+  <arg name="gftt_max_corners"    default="1000"/>
+  <arg name="gftt_min_distance"   default="7"/>
+  <arg name="correspondence"      default="0"/>
+  <!--Motion estimation approach: 0:3D->3D, 1:3D->2D (PnP), 2:2D->2D (Epipolar 
+      Geometry)-->
+  <arg name="motion_estimation"   default="0"/>
+  <arg name="max_features_per_img" default="400"/>
+
+  <!-- Run kinect2_bridge  -->
+  <include unless="$(arg play_bag)" 
+    file="$(find kinect2_bridge)/launch/kinect2_bridge.launch">
+    <arg name="publish_tf" value="true"/>
+  </include>
+  <node if="$(arg play_bag)" pkg="rosbag" type="play" name="bag_player" output="screen" 
+    args="--clock $(arg bags_path)$(arg bag_filename).bag --rate=1.5 -d 10"/>
+
+   <group ns="rtabmap">
+     <node if="$(arg compressed)" name="republish_rgb" type="republish" 
+        pkg="image_transport" 
+        args="$(arg rgb_image_transport) in:=$(arg rgb_topic) raw out:=$(arg rgb_topic_relay)" />
+     <node if="$(arg compressed)" name="republish_depth" type="republish" 
+        pkg="image_transport" 
+        args="$(arg depth_image_transport) in:=$(arg depth_topic) raw out:=$(arg depth_topic_relay)" />
+      
+    <!-- Odometry -->
+    <node pkg="rtabmap_ros" type="rgbd_odometry" name="rgbd_odometry" output="screen"
+      args="$(arg rtabmap_args)">
+      
+      <remap from="rgb/image"       to="$(arg rgb_topic_relay)"/>
+      <remap from="depth/image"     to="$(arg depth_topic_relay)"/>
+      <remap from="rgb/camera_info" to="$(arg camera_info_topic)"/>
+      
+      <param name="frame_id"    type="string" value="$(arg frame_id)"/>
+      <param name="approx_sync" type="bool"   value="$(arg approx_sync)"/>
+
+      <param name="Odom/FillInfoData"     type="string" value="true"/>
+      <param name="Odom/Strategy"         type="string" value="$(arg strategy)"/> 
+      <param name="Odom/ImageDecimation"  type="string" value="-2"/>
+      <param name="OdomF2M/MaxSize"       type="string" value="$(arg local_map)"/>
+      <!--<param name="Odom/ResetCountdown"   type="int"    value="2"/>-->
+      <!--<param name="Odom/ImageBufferSize"  type="int"    value="0"/>-->
+
+      <param name="Vis/EstimationType"    type="int"    value="$(arg motion_estimation)"/>
+      <param name="Vis/FeatureType"       type="string" value="$(arg feature)"/>  
+      <param name="Vis/CorType"                       value="$(arg correspondence)"/> 
+      <param name="Vis/CorNNType"       type="string" value="$(arg nn)"/>
+      <param name="Vis/MaxDepth"        type="string" value="$(arg max_depth)"/>  
+      <param name="Vis/MinInliers"      type="string" value="$(arg min_inliers)"/> 
+      <param name="Vis/InlierDistance"  type="string" value="$(arg inlier_distance)"/>
+      <!-- [Vis/CorType=0] Matching window size (pixels) around projected points when a guess transform is provided to find correspondences. 0 means disabled. -->
+      <param name="Vis/CorrGuessWinSize"  type="string" value="$(arg feature_win_size)"/>
+      <!--Number of iterations used to refine the transformation found by RANSAC. 
+          0 means that the transformation is not refined-->
+      <!--<param name="Vis/RefineIterations" type="string" value="5"/>     -->
+      <param name="Vis/MaxFeatures"     type="string" value="$(arg gftt_max_corners)"/>
+      <param name="GFTT/MinDistance"    type="string" value="$(arg gftt_min_distance)"/>
+      <!--0=Vis, 1=Icp, 2=VisIcp-->
+      <param name="Reg/Strategy"        type="int"    value="0"/>
+
+    </node>
+
+    <!-- Visual SLAM (robot side) -->
+    <!-- args: "delete_db_on_start" and "udebug" -->
+    <node name="rtabmap" pkg="rtabmap_ros" type="rtabmap" output="screen" 
+      args="$(arg rtabmap_args)">
+      
+      <param name="frame_id"        type="string" value="$(arg frame_id)"/>
+      <param name="subscribe_depth" type="bool"   value="true"/>
+
+      <remap from="rgb/image"       to="$(arg rgb_topic_relay)"/>
+      <remap from="depth/image"     to="$(arg depth_topic_relay)"/>
+      <remap from="rgb/camera_info" to="$(arg camera_info_topic)"/>
+
+      <param name="queue_size"  type="int"  value="10"/>
+      <param name="approx_sync" type="bool" value="$(arg approx_sync)"/>
+
+      <!-- RTAB-Map's parameters -->
+      <param name="Grid/DepthDecimation" type="string" value="4"/>
+      <param name="GFTT/MinDistance"        type="string" value="$(arg gftt_min_distance)"/>
+      <!-- Image decimation (>=1) before features extraction. Negative decimation is done from RGB size instead of depth size (if depth is smaller than RGB, it may be interpolated depending of the decimation value) -->
+      <!-- <param name="Mem/ImagePreDecimation"  type="string" value="-2"/> -->
+      <!-- Image decimation (>=1) of saved data in created signatures (after features extraction). -->
+      <!-- <param name="Mem/ImagePostDecimation" type="string" value="-2"/> -->
+      <!--<param name="Mem/RehearsalSimilarity" type="string" value="0.45"/>-->
+      <param name="Kp/DetectorStrategy"     type="string" value="$(arg feature)"/>
+      <!--Maximum words per image (0=no maximum). Setting to -1 will disable features 
+          extraction, so disabling loop closure detection indirectly-->
+      <param name="Kp/MaxFeatures"          type="string" value="$(arg max_features_per_img)"/>
+
+      <param name="Vis/EstimationType"    type="int"    value="$(arg motion_estimation)"/>
+      <param name="Vis/MinInliers"        type="string" value="$(arg min_inliers)"/>
+      <param name="Vis/InlierDistance"    type="string" value="$(arg inlier_distance)"/>
+      <param name="Vis/CorrGuessWinSize"  type="string" value="$(arg feature_win_size)"/>
+      <param name="Vis/MaxFeatures"       type="string" value="$(arg gftt_max_corners)"/>
+      <!--<param name="RGBD/AngularUpdate"  type="string" value="0.01"/>-->
+      <!--<param name="RGBD/LinearUpdate"   type="string" value="0.01"/>-->
+
+      <!--Optimize graph from the newest node. If false, the graph is optimized 
+        from the oldest node of the current graph (this adds an overhead computation 
+        to detect to oldest mode of the current graph, but it can be useful to preserve 
+        the map referential from the oldest node). Warning when set to false: when some
+        nodes are transferred, the first referential of the local map may change, 
+        resulting in momentary changes in robot/map position (which are annoying in 
+        teleoperation)-->
+      <param name="RGBD/OptimizeFromGraphEnd" type="string" value="true"/>
+      <!-- Reject loop closures if optimization error is greater than this value 
+          (0=disabled). This will help to detect when a wrong loop closure is added to 
+          the graph. Not compatible with "Optimizer/Robust" if enabled -->
+      <!--<param name="RGBD/OptimizeMaxError"     type="int"  value="1"/>-->
+
+      <!--Extract features even if there are some already in the nodes.-->
+      <param name="RGBD/LoopClosureReextractFeatures" type="string" value="false"/>
+      <!--Graph optimization strategy: 0=TORO, 1=g2o and 2=GTSAM.-->
+      <param name="Optimizer/Strategy"  type="string" value="2"/>
+      <!--0=Levenberg 1=GaussNewton 2=Dogleg
+          0 -> działa znacznie lepiej niż 1 i 2-->
+      <param name="GTSAM/Optimizer"     type="int"    value="1"/>
+
+      <!-- process all images -->
+      <!--<param name="Rtabmap/ImageBufferSize"   type="int" value="0"/> -->
+      <!-- 0 means process as fast as camera publishes images -->
+      <!--<param name="Rtabmap/DetectionRate"     type="int" value="5"/>-->
+      <!--<param name="Rtabmap/TimeThr"           type="string" value="0"/>-->
+
+      <!--<param name="Mem/IncrementalMemory"     type="string" value="true"/>-->
+    </node>
+  </group>
+</launch>
+
