@@ -1,0 +1,26 @@
+<launch>
+
+<arg name="rviz_cfg"   default="$(find zed_wrapper)/launch/config/rgbd.rviz" />
+<include file="$(find zed_wrapper)/launch/zed.launch"/>
+
+  <!-- Visualization RVIZ -->
+  <!-- 
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_cfg)"/>
+  <node if="$(arg rviz)" pkg="nodelet" type="nodelet" name="points_xyzrgb" args="standalone rtabmap_ros/point_cloud_xyzrgb">
+    <remap from="left/image"        to="$(arg left_image_topic_relay)"/>
+    <remap from="right/image"       to="$(arg right_image_topic_relay)"/>
+    <remap from="left/camera_info"  to="$(arg left_camera_info_topic)"/>
+    <remap from="right/camera_info" to="$(arg right_camera_info_topic)"/>
+    <remap from="rgb/image"         to="$(arg rgb_topic_relay)"/>
+    <remap from="depth/image"       to="$(arg depth_topic_relay)"/>
+    <remap from="rgb/camera_info"   to="$(arg camera_info_topic)"/>
+    <remap from="cloud"             to="voxel_cloud" />
+
+    <param name="decimation"  type="double" value="2"/>
+    <param name="voxel_size"  type="double" value="0.02"/>
+    <param name="approx_sync" type="bool"   value="$(arg approx_sync)"/>
+  </node>
+ -->
+<node pkg="rviz"   type="rviz"  name="zed_vis" args="-d $(arg rviz_cfg)"/>
+
+</launch>
