@@ -1,0 +1,179 @@
+<launch>
+  <!-- ===================================================================== -->
+  <!-- RTAB_MAP ODOMETRY CONFIGURATION -->
+  <!--  -"strategy"        : Strategy: Frame-to-Map 1=Frame-To-Frame
+        -"feature"         : Feature type: 0=SURF 1=SIFT 2=ORB 3=FAST/FREAK 
+                              4=FAST/BRIEF 5=GFTT/FREAK 6=GFTT/BRIEF 7=BRISK
+        -"nn"              : Nearest neighbor strategy : 0=Linear, 1=FLANN_KDTREE, 
+                              2=FLANN_LSH, 3=BRUTEFORCE 4=BRUTEFORCE_GPU
+                             Set to 1 for float descriptor like SIFT/SURF                  
+                             Set to 3 for binary descriptor like ORB/FREAK/BRIEF/BRISK  
+        -"max_depth"       : Maximum features depth (m)  
+        -"min_inliers"     : Minimum visual correspondences to accept a transformation (m) 
+        -"inlier_distance" : RANSAC maximum inliers distance (m)  
+        -"local_map"       : Local map size: number of unique features to keep track 
+        -"odom_info_data"  : Fill odometry info messages with inliers/outliers data.
+        -"correspondence"  : 0=Features Matching, 1=Optical Flow 
+        -"feature_win_size": Matching window size (pixels) around projected points -->
+  <!-- ===================================================================== -->
+  <arg name="strategy"              default="1"/>
+  <arg name="feature"               default="6"/>
+  <arg name="nn"                    default="3"/>
+  <arg name="max_depth"             default="10"/>
+  <arg name="min_inliers"           default="15"/>
+  <arg name="inlier_distance"       default="0.1"/>
+  <arg name="feature_win_size"      default="40"/>
+  <arg name="local_map"             default="1000"/>
+  <arg name="vis_reg_max_features"  default="1000"/>
+  <arg name="gftt_min_distance"     default="7"/>
+  <arg name="correspondence"        default="0"/>
+  <!--Motion estimation approach: 0:3D->3D, 1:3D->2D (PnP), 2:2D->2D (Epipolar 
+      Geometry)-->
+  <arg name="motion_estimation"       default="0"/>
+  <arg name="img_vocabulary_size"     default="400"/>
+
+  <!-- Use subpixel feature refinement -->
+  <arg name="subpix_ref"         default="false"/>
+  <!-- Test configuration for better loop closure detection -->
+  <arg name="closure_detection"  default="false"/>
+  <!-- Whether or not to perform robust graph optimization -->
+  <arg name="robust_graph_optim" default="false"/>
+
+  <node pkg="rtabmap_ros"   type="rgbd_odometry"  name="rgbd_odometry"
+      output="screen">
+      <param name="Odom/FillInfoData"     type="string" value="true"/>
+      <param name="Odom/Strategy"         type="string" value="$(arg strategy)"/> 
+      <param name="Odom/ImageDecimation"  type="string" value="-2"/>
+      <!-- Visual] Maximum map size: If > 0 (example 5000), the odometry will maintain 
+            a local map of X maximum features. This will decrease odometry drifting 
+            when the camera is not moving -->
+      <param name="OdomF2M/MaxSize"       type="string" value="$(arg local_map)"/>
+      <param name="Odom/ResetCountdown"   type="int"    value="4"/>
+      <param name="Odom/ImageBufferSize"  type="int"    value="5"/>
+
+      <param name="Vis/EstimationType"    type="int"    value="$(arg motion_estimation)"/>
+      <param name="Vis/FeatureType"       type="string" value="$(arg feature)"/>  
+      <param name="Vis/CorType"                       value="$(arg correspondence)"/> 
+      <param name="Vis/CorNNType"       type="string" value="$(arg nn)"/>
+      <param name="Vis/MaxDepth"        type="string" value="$(arg max_depth)"/>  
+      <param name="Vis/MinInliers"      type="string" value="$(arg min_inliers)"/> 
+      <param name="Vis/InlierDistance"  type="string" value="$(arg inlier_distance)"/>
+      <!-- [Vis/CorType=0] Matching window size (pixels) around projected points when a guess transform is provided to find correspondences. 0 means disabled. -->
+      <param name="Vis/CorrGuessWinSize"    type="string" value="$(arg feature_win_size)"/>
+      <!--Number of iterations used to refine the transformation found by RANSAC. 
+          0 means that the transformation is not refined-->
+      <!--<param name="Vis/RefineIterations" type="string" value="5"/>     -->
+      <param name="Vis/MaxFeatures"         type="string" value="$(arg vis_reg_max_features)"/>
+      <param name="GFTT/MinDistance"        type="string" value="$(arg gftt_min_distance)"/>
+      <!--0=Vis, 1=Icp, 2=VisIcp-->
+      <param name="Reg/Strategy"            type="int"    value="0"/>  
+  </node>
+
+  <node pkg="rtabmap_ros"   type="rtabmap"  name="rtabmap">
+    <!-- RTAB-Map's parameters -->
+      <!-- RGBD-SLAM -> Local Occupancy Grid tab: 
+          [Grid/DepthDecimation=true] Decimation of the depth image before creating cloud -->
+      <param name="Grid/DepthDecimation"    type="string" value="4"/>
+      <param name="GFTT/MinDistance"        type="string" value="$(arg gftt_min_distance)"/>
+      <!-- Image decimation (>=1) before features extraction. Negative decimation is done from RGB size instead of depth size (if depth is smaller than RGB, it may be interpolated depending of the decimation value) -->
+      <param name="Mem/ImagePreDecimation"  type="string" value="-4"/>
+      <!-- Image decimation (>=1) of saved data in created signatures (after features extraction). -->
+      <param name="Mem/ImagePostDecimation" type="string" value="-2"/>
+      <param name="Kp/DetectorStrategy"     type="string" value="$(arg feature)"/>
+      <!--Memory -> Vocabulary, Feature Extraction tab
+          Maximum words per image (0=no maximum). Setting to -1 will disable features 
+          extraction, so disabling loop closure detection indirectly-->
+      <param name="Kp/MaxFeatures"          type="string" value="$(arg img_vocabulary_size)"/>
+      
+      <!-- ********************************************************************* -->
+      <!-- Sub pixel refinement 
+           Refining features to sub pixel. Sub pixel corners may not be needed for features like SURF/SIFT, which are already sub pixel-->
+      <param if="$(arg subpix_ref)" name="Kp/SubPixWinSize"        type="string" value="3"/>
+      <param if="$(arg subpix_ref)" name="Kp/SubPixIterations"     type="string" value="5"/>
+      <param if="$(arg subpix_ref)" name="Kp/SubPixEps"            type="string" value="0.02"/>
+      <!-- ********************************************************************* -->
+
+      <param name="Vis/EstimationType"    type="int"    value="$(arg motion_estimation)"/>
+      <param name="Vis/MinInliers"        type="string" value="$(arg min_inliers)"/>
+      <!-- Motion Estimation 3D -> 3D Maximum distance accepted between visual word
+           correspondences. -->
+      <param name="Vis/InlierDistance"    type="string" value="$(arg inlier_distance)"/>
+      <param name="Vis/CorrGuessWinSize"  type="string" value="$(arg feature_win_size)"/>
+      <!-- Motion Estimation -> Visual Registration tab - Max features extracted from 
+           the images (0 means inf). -->
+      <param name="Vis/MaxFeatures"       type="string" value="$(arg vis_reg_max_features)"/>
+      <!--<param name="RGBD/AngularUpdate"  type="string" value="0.01"/>-->
+      <!--<param name="RGBD/LinearUpdate"   type="string" value="0.01"/>-->
+
+      <!--Optimize graph from the newest node. If false, the graph is optimized 
+        from the oldest node of the current graph (this adds an overhead computation 
+        to detect to oldest mode of the current graph, but it can be useful to preserve 
+        the map referential from the oldest node). Warning when set to false: when some
+        nodes are transferred, the first referential of the local map may change, 
+        resulting in momentary changes in robot/map position (which are annoying in 
+        teleoperation)-->
+      <param name="RGBD/OptimizeFromGraphEnd" type="string" value="true"/>
+      
+      <!-- ********************************************************************* -->
+      <!-- Loop closure detection - wiki tutorial -->
+
+      <param name="RGBD/Enabled"              type="bool"   value="true"/>
+      <!-- process all images -->
+      <param name="Rtabmap/ImageBufferSize"   type="int"    value="3"/> 
+      <!-- 0 means process as fast as camera publishes images -->
+      <param name="Rtabmap/DetectionRate"     type="int"    value="0"/>
+
+      <param if="$(arg closure_detection)" name="Mem/RehearsalSimilarity"   
+                type="string" value="0.4"/>
+      <param if="$(arg closure_detection)" name="Mem/STMSize"               
+                type="int"    value="15"/>
+      <!-- On merge, update to new id. When false, no copy. -->
+      <param if="$(arg closure_detection)" name="Mem/RehearsalIdUpdatedToNewOne"  
+                type="bool"    value="true"/>
+      <!-- ignore images with little or no features -->
+      <param if="$(arg closure_detection)" name="Mem/BadSignaturesIgnored"  
+                type="bool"   value="true"/>
+      <!-- ********************************************************************* -->
+
+      <!-- ********************************************************************* -->
+      <!-- Robust graph optimization  -->
+
+      <!--Graph optimization strategy: 0=TORO, 1=g2o and 2=GTSAM.-->
+      <param name="Optimizer/Strategy"        type="string" value="2"/>
+
+      <param if="$(arg robust_graph_optim)"   name="Optimizer/Robust"
+                type="string" value="true"/>
+      <!-- Reject loop closures if optimization error is greater than this value 
+          (0=disabled). This will help to detect when a wrong loop closure is added to 
+          the graph. Not compatible with "Optimizer/Robust" if enabled -->
+      <param if="$(arg robust_graph_optim)"   name="RGBD/OptimizeMaxError"
+               type="int"  value="0"/>
+
+      <param unless="$(arg robust_graph_optim)"   name="Optimizer/Robust"
+                type="string" value="false"/>
+      <param unless="$(arg robust_graph_optim)"   name="RGBD/OptimizeMaxError"
+               type="int"  value="1"/>
+      <!-- ********************************************************************* -->
+
+      <!--Extract features even if there are some already in the nodes.-->
+      <param name="RGBD/LoopClosureReextractFeatures" type="string" value="true"/>
+      <!--0=Levenberg 1=GaussNewton 2=Dogleg
+          0 -> działa znacznie lepiej niż 1 i 2-->
+      <param name="GTSAM/Optimizer"     type="int"    value="1"/>
+
+      <!--<param name="Rtabmap/TimeThr"           type="string" value="0"/>-->
+      
+      <!-- Create intermediate nodes if odometry is faster than the detection rate. -->
+      <param name="Rtabmap/CreateIntermediateNodes"   type="bool" value="true"/>
+
+      <param name="Mem/IncrementalMemory"     type="string" value="true"/>
+
+      <!-- Keep raw sensor data. Only useful to save loop closure computation time 
+           when features re-extraction is enabled. Disable to save RAM memory. -->
+      <param name="Mem/ImageKept"           type="bool" value="true"/>
+      <!-- Save depth image into 16 bits format to reduce memory used. Warning: 
+           values over ~65 meters are ignored (maximum 65535 millimeters). -->
+      <param name="Mem/SaveDepth16Format"   type="bool" value="true"/> 
+  </node>
+
+</launch>
