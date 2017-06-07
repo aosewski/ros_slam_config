@@ -1,6 +1,6 @@
 <launch>
 
-  <arg name="base_frame_id"     default="zed_current_frame"/>
+  <arg name="base_frame_id"     default="camera_link"/>
   <arg name="zed_namespace"     default="camera"/>
 
   <arg name="approx_sync"       default="false"/>
