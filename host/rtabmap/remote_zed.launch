@@ -1,0 +1,30 @@
+<launch>
+
+  <arg name="base_frame_id"     default="zed_current_frame"/>
+  <arg name="zed_namespace"     default="camera"/>
+
+  <arg name="approx_sync"       default="false"/>
+  <arg name="visual_odometry"   default="false"/>
+  <arg name="compressed"        default="false"/>
+
+  <!-- ZED TOPICS -->
+  <arg name="zed_rgb_topic"           default="/$(arg zed_namespace)/rgb/image_rect_color"/>
+  <arg name="zed_depth_topic"         default="/$(arg zed_namespace)/depth/depth_registered"/>
+  <arg name="zed_camera_info_topic"   default="/$(arg zed_namespace)/rgb/camera_info"/>
+  <arg name="zed_odom_topic"          default="/$(arg zed_namespace)/odom"/>
+
+  <include file="remote_rtabmapviz.launch">
+    <arg name="base_frame_id"     value="$(arg base_frame_id)"/>
+    <arg name="approx_sync"       value="$(arg approx_sync)"/>
+
+    <arg name="rgb_topic"         value="$(arg zed_rgb_topic)"/>
+    <arg name="depth_topic"       value="$(arg zed_depth_topic)"/>
+    <arg name="camera_info_topic" value="$(arg zed_camera_info_topic)"/>
+    <arg name="odom_topic"        value="$(arg zed_odom_topic)"/>
+
+    <arg name="compressed"        value="$(arg compressed)"/>
+    <arg name="visual_odometry"   value="$(arg visual_odometry)"/>
+  </include>
+
+</launch>
+

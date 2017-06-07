@@ -1,0 +1,24 @@
+<launch>
+
+  <arg name="base_frame_id"     default="kinect2_base_link"/>
+  <arg name="resolution"        default="qhd"/>   
+  <arg name="approx_sync"       default="true"/>
+
+  <arg name="rgb_topic"         default="/kinect2/$(arg resolution)/image_color_rect"/>
+  <arg name="depth_topic"       default="/kinect2/$(arg resolution)/image_depth_rect"/>
+  <arg name="camera_info_topic" default="/kinect2/$(arg resolution)/camera_info"/>
+
+  <arg name="compressed"        default="false"/>
+
+  <include file="remote_rtabmapviz.launch">
+    <arg name="base_frame_id"     value="${arg base_frame_id}"/>
+    <arg name="approx_sync"       value="${arg approx_sync}"/>
+
+    <arg name="rgb_topic"         value="/${arg rgb_topic}"/>
+    <arg name="depth_topic"       value="/${arg depth_topic}"/>
+    <arg name="camera_info_topic" value="/${arg camera_info_topic}"/>
+
+    <arg name="compressed"        value="${arg compressed}"/>
+  </include>
+
+</launch>
