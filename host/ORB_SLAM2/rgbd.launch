@@ -1,0 +1,35 @@
+<launch>
+
+  <arg name="robot_id"          default="jetsonTK1"/>
+  <arg name="debug"             default="0"/>
+  <arg name="example_prefix"    default=""                    unless="$(arg debug)"/>
+  <arg name="example_prefix"    default="screen -d -m gdb --args" if="$(arg debug)"/>
+
+  <!-- ==================================================================== -->
+  <!-- ZED CAMERA ARGUMETNS -->
+  <arg name="zed_namespace"     default="camera"/>
+  <arg name="zed_rgb_topic"     default="$(arg zed_namespace)/rgb/image_raw_color"/>
+  <!-- <arg name="zed_rgb_topic"     default="$(arg zed_namespace)/rgb/image_rect_color"/> -->
+  <arg name="zed_depth_topic"   default="$(arg zed_namespace)/depth/depth_registered"/>
+
+  <!-- ==================================================================== -->
+  <!-- LAUNCH ZED CAMERA ON REMOTE MACHINE-->
+  <machine name="$(arg robot_id)" address="10.42.0.179" 
+    env-loader="/home/ubuntu/inv/playground/pcl/src/pcl_tutorials/config/jetson_env_cfg.sh"
+    user="ubuntu" default="false" timeout="5.0"/>
+      
+  <include file="/home/adamo/inv/repos/ros_slam_config/host/zed/zed.launch">
+    <arg name="robot_id"        value="$(arg robot_id)"/>
+    <arg name="zed_namespace"   value="camera"/>
+  </include>
+
+  <!-- ==================================================================== -->
+  <!-- RUN ORB_SLAM2 NODE -->
+  <node pkg="ORB_SLAM2"   type="RGBD"  name="orb_rgbd_slam_node"
+    args="/home/adamo/inv/repos/ORB_SLAM2/Vocabulary/ORBvoc.txt /home/adamo/inv/repos/ros_slam_config/host/ORB_SLAM2/ZED_rgbd.yaml">
+
+    <remap from="camera/rgb/image_raw"              to="$(arg zed_rgb_topic)"/>
+    <remap from="camera/depth_registered/image_raw" to="$(arg zed_depth_topic)"/>
+  </node>
+
+</launch>

@@ -1,0 +1,39 @@
+<launch>
+
+  <arg name="robot_id"          default="jetsonTK1"/>
+  <arg name="debug"             default="0"/>
+  <arg name="example_prefix"    default=""                    unless="$(arg debug)"/>
+  <arg name="example_prefix"    default="screen -d -m gdb --args" if="$(arg debug)"/>
+
+  <!-- ==================================================================== -->
+  <!-- ZED CAMERA ARGUMETNS -->
+  <arg name="zed_namespace"     default="camera"/>
+  <arg name="zed_left_rgb_topic"      default="$(arg zed_namespace)/left/image_rect_color"/>
+  <arg name="zed_right_rgb_topic"     default="$(arg zed_namespace)/right/image_rect_color"/>
+
+  <!-- ==================================================================== -->
+  <!-- LAUNCH ZED CAMERA ON REMOTE MACHINE-->
+  <machine name="$(arg robot_id)" address="10.42.0.179" 
+    env-loader="/home/ubuntu/inv/playground/pcl/src/pcl_tutorials/config/jetson_env_cfg.sh"
+    user="ubuntu" default="false" timeout="5.0"/>
+      
+  <include file="/home/adamo/inv/repos/ros_slam_config/host/zed/zed.launch">
+    <arg name="robot_id"        value="$(arg robot_id)"/>
+    <arg name="zed_namespace"   value="camera"/>
+  </include>
+
+  <!-- ==================================================================== -->
+
+  <arg name="online_rect"   default="false"/>
+  <arg name="orb_voc"       default="/home/adamo/inv/repos/ORB_SLAM2/Vocabulary/ORBvoc.txt"/>
+  <arg name="orb_cam_set"   default="/home/adamo/inv/repos/ros_slam_config/host/ORB_SLAM2/ZED_stereo.yaml"/>
+
+  <!-- RUN ORB_SLAM2 NODE -->
+  <node pkg="ORB_SLAM2"   type="Stereo"  name="orb_stereo_slam_node"
+    args="$(arg orb_voc) $(arg orb_cam_set) $(arg online_rect)">
+
+    <remap from="camera/left/image_raw"  to="$(arg zed_left_rgb_topic)"/>
+    <remap from="camera/right/image_raw" to="$(arg zed_right_rgb_topic)"/>
+  </node>
+
+</launch>
